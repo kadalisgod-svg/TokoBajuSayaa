@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BajuStore - Toko Baju Online</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .product-card { transition: transform 0.2s; }
+        .product-card:hover { transform: translateY(-5px); }
+        .size-button { cursor: pointer; transition: all 0.3s ease; }
+        .size-button:disabled { cursor: not-allowed; }
+        .size-button:not(:disabled):hover { transform: scale(1.05); }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        #toast { position:fixed; bottom:24px; right:24px; z-index:9999; background:#1f2937; color:white;
+            padding:12px 18px; border-radius:10px; font-size:14px; max-width:300px;
+            transform:translateY(80px); opacity:0; transition:all 0.3s; pointer-events:none; }
+        #toast.show { transform:translateY(0); opacity:1; }
+        #toast.success { border-left:4px solid #16a34a; }
+        #toast.error   { border-left:4px solid #dc2626; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+<div id="toast"></div>
+
+<div id="main-app">
+    <!-- Navbar -->
+    <nav class="bg-white shadow-md sticky top-0 z-40">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="text-2xl font-bold text-green-600"><i class="fa-solid fa-shop"></i> BajuStore</div>
+            <div class="flex items-center gap-4">
+                <!-- Nama user -->
+                <div id="user-info" class="hidden sm:flex items-center gap-2 text-sm">
+                    <i class="fa-solid fa-user-circle text-xl text-green-600"></i>
+                    <span id="user-name-display"></span>
+                </div>
+                <!-- Keranjang -->
+                <div class="relative cursor-pointer" onclick="toggleCart()">
+                    <i class="fa-solid fa-cart-shopping text-2xl"></i>
+                    <span id="cart-count" class="absolute -top-2 -right-2 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5">0</span>
+                </div>
+                <!-- Logout (hanya non-guest) -->
+                <button onclick="handleLogout()" id="logout-btn"
+                    class="hidden px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm">
+                    <i class="fa-solid fa-sign-out-alt"></i> Logout
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Dashboard Customer (login) -->
+    <div id="customer-dashboard" class="hidden bg-blue-50 border-b">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div>
+                <h2 class="text-xl font-bold text-blue-800">Selamat Datang, <span id="dashboard-user-name"></span>!</h2>
+                <p class="text-sm text-blue-600">Terima kasih telah berbelanja di BajuStore</p>
+            </div>
+            <button onclick="openOrderHistory()"
+                class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
+                <i class="fa-solid fa-history"></i> Riwayat Pesanan
+            </button>
+        </div>
+    </div>
+
+    <!-- Banner Guest -->
+    <div id="guest-banner" class="hidden bg-amber-50 border-b border-amber-200">
+        <div class="container mx-auto px-4 py-3 flex items-center justify-between">
+            <p class="text-amber-800 text-sm">
+                <i class="fa-solid fa-circle-info mr-1"></i>
+                Anda berbelanja sebagai <strong>Tamu</strong> — riwayat pesanan tidak disimpan.
+            </p>
+            <button onclick="window.location.href='login.html'"
+                class="text-sm bg-amber-500 text-white px-3 py-1 rounded hover:bg-amber-600">
+                Login / Daftar
+            </button>
+        </div>
+    </div>
+
+    <!-- Hero -->
+    <header class="bg-green-600 text-white py-16 text-center">
+        <h1 class="text-4xl font-bold mb-4">Koleksi Baju Terbaru 2024</h1>
+        <p class="text-lg">Pesan mudah via WhatsApp, pengiriman cepat ke seluruh Indonesia.</p>
+    </header>
+
+    <!-- Filter & Produk -->
+    <section class="container mx-auto px-4 py-12">
+        <h2 class="text-3xl font-bold text-center mb-6">Produk Kami</h2>
+
+        <div class="mb-8 flex flex-col md:flex-row gap-3 md:items-end md:justify-between">
+            <div class="flex-1">
+                <label class="text-sm font-semibold text-gray-700">Cari Produk</label>
+                <div class="mt-1 relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"></i>
+                    <input id="product-search" oninput="renderProducts()" type="text"
+                        placeholder="Nama / kategori..."
+                        class="w-full border border-gray-300 rounded-lg px-10 py-2 focus:outline-none focus:ring-2 focus:ring-green-200">
+                </div>
+            </div>
+            <div class="md:w-56">
+                <label class="text-sm font-semibold text-gray-700">Kategori</label>
+                <select id="product-category" onchange="renderProducts()"
+                    class="mt-1 w-full border border-gray-300 rounded-lg px-4 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-green-200">
+                    <option value="all">Semua Kategori</option>
+                </select>
+            </div>
+        </div>
+
+        <div id="product-list" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6"></div>
+    </section>
+
+    <!-- Modal Detail Produk -->
+    <div id="product-detail-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto" style="animation:fadeIn 0.3s ease">
+        <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg shadow-lg w-full max-w-2xl">
+                <div class="flex justify-between items-center p-6 border-b">
+                    <h3 id="modal-product-name" class="text-2xl font-bold"></h3>
+                    <button onclick="closeProductDetail()" class="text-gray-500 hover:text-red-500">
+                        <i class="fa-solid fa-times text-2xl"></i>
+                    </button>
+                </div>
+                <div class="p-6">
+                    <img id="modal-product-image" src="" alt="" class="w-full h-72 object-cover rounded-lg mb-5">
+                    <div class="flex justify-between items-center mb-4">
+                        <span class="text-gray-600">Harga:</span>
+                        <span id="modal-product-price" class="text-2xl font-bold text-green-600"></span>
+                    </div>
+                    <div class="mb-5 p-4 bg-gray-50 rounded">
+                        <h4 class="font-semibold mb-1">Deskripsi</h4>
+                        <p id="modal-product-description" class="text-gray-700 text-sm"></p>
+                    </div>
+                    <div class="mb-4 flex gap-4 text-sm">
+                        <div class="flex-1"><span class="font-semibold text-gray-600">Kategori:</span><p id="modal-product-category"></p></div>
+                        <div class="flex-1"><span class="font-semibold text-gray-600">Material:</span><p id="modal-product-material"></p></div>
+                    </div>
+                    <div class="mb-5">
+                        <h4 class="font-semibold mb-2">Pilih Ukuran:</h4>
+                        <div id="size-options" class="grid grid-cols-4 gap-2"></div>
+                    </div>
+                    <div id="stock-info" class="mb-5 p-3 bg-blue-50 rounded text-sm">
+                        <p class="text-gray-700">Pilih ukuran terlebih dahulu</p>
+                    </div>
+                    <div class="mb-5">
+                        <label class="font-semibold">Jumlah:</label>
+                        <div class="flex items-center gap-3 mt-2">
+                            <button onclick="decreaseQty()" class="bg-gray-200 w-10 h-10 rounded hover:bg-gray-300 text-lg font-bold">-</button>
+                            <input id="modal-qty" type="number" value="1" min="1"
+                                class="border border-gray-300 w-16 px-3 py-2 rounded text-center">
+                            <button onclick="increaseQty()" class="bg-gray-200 w-10 h-10 rounded hover:bg-gray-300 text-lg font-bold">+</button>
+                        </div>
+                    </div>
+                    <button id="modal-add-button" onclick="addToCart()"
+                        class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition opacity-50 cursor-not-allowed"
+                        disabled>
+                        <i class="fa-solid fa-cart-plus"></i> Tambah ke Keranjang
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Keranjang -->
+    <div id="cart-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50">
+        <div class="bg-white absolute right-0 top-0 h-full w-full md:w-96 shadow-lg p-6 flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold">Keranjang Anda</h3>
+                <button onclick="toggleCart()" class="text-gray-500 hover:text-red-500">
+                    <i class="fa-solid fa-times text-2xl"></i>
+                </button>
+            </div>
+            <div id="cart-items" class="flex-1 overflow-y-auto mb-4">
+                <p class="text-gray-500 text-center mt-10">Keranjang kosong.</p>
+            </div>
+            <div class="border-t pt-4">
+                <div class="flex justify-between text-xl font-bold mb-4">
+                    <span>Total:</span>
+                    <span id="cart-total">Rp 0</span>
+                </div>
+                <button onclick="checkout()"
+                    class="w-full bg-green-600 text-white py-3 rounded-lg font-bold hover:bg-green-700 transition">
+                    <i class="fa-brands fa-whatsapp"></i> Pesan via WhatsApp
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Riwayat Pesanan -->
+    <div id="order-history-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-50 overflow-y-auto">
+        <div class="min-h-screen flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-xl w-full max-w-2xl">
+                <div class="flex justify-between items-center p-6 border-b sticky top-0 bg-white rounded-t-xl">
+                    <h3 class="text-xl font-bold"><i class="fa-solid fa-history text-blue-600 mr-2"></i>Riwayat Pesanan</h3>
+                    <button onclick="closeOrderHistory()" class="text-gray-500 hover:text-red-500">
+                        <i class="fa-solid fa-times text-xl"></i>
+                    </button>
+                </div>
+                <div id="order-history-content" class="p-6"></div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-gray-800 text-white py-8 text-center mt-12">
+        <p>&copy; 2024 BajuStore. All rights reserved.</p>
+    </footer>
+</div>
+
+<script>
+// =====================================================
+// KUNCI STORAGE — IDENTIK DI SEMUA FILE
+// =====================================================
+const BS_CUSTOMERS    = 'bs_customers';
+const BS_CURRENT_USER = 'bs_current_user';
+const BS_PRODUCTS     = 'bs_products';
+const BS_ORDERS       = 'bs_orders';
+const BS_CART         = 'bs_cart';
+
+const SELLER_WA = '6281284369567';
+
+// =====================================================
+// DATA
+// =====================================================
+let currentUser = null;
+let products    = [];
+let cart        = [];
+let orders      = [];
+let selectedProduct = null;
+let selectedSize    = null;
+
+const DEFAULT_PRODUCTS = [
+    { id:1, name:"Kaos Polos Hitam",         price:35000,  image:"https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?w=500&q=80", description:"Kaos polos hitam berkualitas tinggi, bahan 100% katun nyaman sehari-hari.", category:"Kaos Pria",       material:"100% Katun Premium",            sizes:{XS:5,S:8,M:10,L:7,XL:4,XXL:3} },
+    { id:2, name:"Kemeja Putih Lengan Panjang",price:85000, image:"https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=500&q=80", description:"Kemeja formal lengan panjang, cocok bisnis maupun casual.",               category:"Kemeja Formal",    material:"60% Katun, 40% Poliester",      sizes:{XS:0,S:6,M:9,L:8,XL:5,XXL:2} },
+    { id:3, name:"Hoodie Abu Abu",             price:120000, image:"https://images.unsplash.com/photo-1556905055-8f358a7a47b2?w=500&q=80", description:"Hoodie abu hangat desain minimalis modern dengan kantong & tali.",        category:"Jaket & Hoodie",   material:"80% Katun, 20% Polyester",      sizes:{XS:4,S:7,M:10,L:8,XL:5,XXL:0} },
+    { id:4, name:"Jaket Jeans Biru",           price:150000, image:"https://images.unsplash.com/photo-1578932750294-f5075e85f44a?w=500&q=80", description:"Jaket jeans biru klasik denim premium, saku samping, timeless.",       category:"Jaket & Hoodie",   material:"100% Denim Katun",              sizes:{XS:0,S:5,M:8,L:7,XL:4,XXL:2} },
+    { id:5, name:"Kaos Polos Putih",           price:35000,  image:"https://images.unsplash.com/photo-1581655353564-df123a1eb820?w=500&q=80", description:"Kaos putih sempurna untuk casual atau layering, lembut & breathable.", category:"Kaos Pria",        material:"100% Katun Premium",            sizes:{XS:6,S:10,M:12,L:9,XL:5,XXL:4} },
+    { id:6, name:"Kemeja Flanel Merah",        price:95000,  image:"https://images.unsplash.com/photo-1589310243389-96a5483213a8?w=500&q=80", description:"Kemeja flanel kotak-kotak klasik, casual maupun semi-formal.",         category:"Kemeja Casual",    material:"100% Katun Flanel",             sizes:{XS:0,S:5,M:8,L:6,XL:3,XXL:1} },
+    { id:7, name:"Jaket Parka Hijau Army",     price:180000, image:"https://images.unsplash.com/photo-1544022613-e87ca75a784a?w=500&q=80", description:"Jaket parka militer hijau army, tahan lama, cocok berbagai musim.",     category:"Jaket & Hoodie",   material:"Polyester tahan air + Katun",   sizes:{XS:3,S:6,M:7,L:5,XL:2,XXL:0} },
+    { id:8, name:"Kaus Oblong Navy",           price:40000,  image:"https://images.unsplash.com/photo-1612884535851-37f64f09584d?w=500&q=80", description:"Kaus oblong navy jahitan rapi, berkualitas, nyaman sehari-hari.",      category:"Kaos Pria",        material:"100% Katun Berkualitas",        sizes:{XS:0,S:8,M:12,L:10,XL:6,XXL:3} },
+];
+
+// =====================================================
+// INIT
+// =====================================================
+function initApp() {
+    currentUser = loadCurrentUser();
+    products    = loadProducts();
+    cart        = loadCart();
+    orders      = loadOrders();
+
+    // Cek autentikasi: harus ada currentUser (termasuk guest)
+    if (!currentUser) {
+        window.location.href = 'login.html';
+        return;
+    }
+
+    // Tampilkan UI
+    if (currentUser.guest) {
+        document.getElementById('guest-banner').classList.remove('hidden');
+        document.getElementById('user-info').classList.remove('hidden');
+        document.getElementById('user-name-display').textContent = 'Tamu';
+    } else {
+        document.getElementById('user-info').classList.remove('hidden');
+        document.getElementById('user-name-display').textContent = currentUser.name;
+        document.getElementById('logout-btn').classList.remove('hidden');
+        document.getElementById('customer-dashboard').classList.remove('hidden');
+        document.getElementById('dashboard-user-name').textContent = currentUser.name;
+    }
+
+    populateCategories();
+    renderProducts();
+    updateCartBadge();
+}
+
+// =====================================================
+// STORAGE HELPERS
+// =====================================================
+function loadCurrentUser() {
+    const s = localStorage.getItem(BS_CURRENT_USER);
+    return s ? JSON.parse(s) : null;
+}
+
+function loadProducts() {
+    const s = localStorage.getItem(BS_PRODUCTS);
+    if (s) { try { return JSON.parse(s); } catch(e){} }
+    const p = JSON.parse(JSON.stringify(DEFAULT_PRODUCTS));
+    localStorage.setItem(BS_PRODUCTS, JSON.stringify(p));
+    return p;
+}
+
+function saveProducts() { localStorage.setItem(BS_PRODUCTS, JSON.stringify(products)); }
+
+function loadCart() {
+    const s = localStorage.getItem(BS_CART);
+    return s ? JSON.parse(s) : [];
+}
+
+function saveCart() { localStorage.setItem(BS_CART, JSON.stringify(cart)); }
+
+function loadOrders() {
+    const s = localStorage.getItem(BS_ORDERS);
+    return s ? JSON.parse(s) : [];
+}
+
+function saveOrders() { localStorage.setItem(BS_ORDERS, JSON.stringify(orders)); }
+
+// =====================================================
+// PRODUK
+// =====================================================
+function populateCategories() {
+    const sel = document.getElementById('product-category');
+    const cats = [...new Set(products.map(p => p.category))].sort();
+    sel.innerHTML = '<option value="all">Semua Kategori</option>' +
+        cats.map(c => `<option value="${c}">${c}</option>`).join('');
+}
+
+function renderProducts() {
+    const q   = document.getElementById('product-search').value.trim().toLowerCase();
+    const cat = document.getElementById('product-category').value;
+
+    const list = products.filter(p => {
+        const matchCat = cat === 'all' || p.category === cat;
+        const matchQ   = !q || `${p.name} ${p.category} ${p.description}`.toLowerCase().includes(q);
+        return matchCat && matchQ;
+    });
+
+    const container = document.getElementById('product-list');
+    if (list.length === 0) {
+        container.innerHTML = '<p class="text-center text-gray-500 col-span-4 py-12">Produk tidak ditemukan.</p>';
+        return;
+    }
+
+    container.innerHTML = list.map(p => {
+        const totalStock = Object.values(p.sizes).reduce((a,b) => a+b, 0);
+        const outOfStock = totalStock === 0;
+        const lowStock   = !outOfStock && totalStock <= 5;
+        const badge = outOfStock
+            ? '<span class="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">Stok Habis</span>'
+            : lowStock
+            ? `<span class="text-xs bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full font-semibold">Sisa ${totalStock}</span>`
+            : '';
+        return `
+        <div class="bg-white rounded-lg shadow-md overflow-hidden product-card">
+            <div class="relative">
+                <img src="${p.image}" alt="${p.name}" class="w-full h-48 object-cover"
+                    onerror="this.src='https://via.placeholder.com/400x300?text=No+Image'">
+                ${outOfStock ? '<div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center"><span class="text-white font-bold text-lg bg-red-600 px-3 py-1 rounded">HABIS</span></div>' : ''}
+            </div>
+            <div class="p-4">
+                <div class="flex justify-between items-start mb-1">
+                    <h3 class="text-base font-semibold leading-tight">${p.name}</h3>
+                    ${badge}
+                </div>
+                <p class="text-xs text-gray-500 mb-1">${p.category}</p>
+                <p class="text-green-600 font-bold text-lg mb-2">${fmt(p.price)}</p>
+                <p class="text-gray-600 text-xs mb-3 line-clamp-2">${p.description}</p>
+                <button onclick="openProductDetail(${p.id})"
+                    class="w-full bg-gray-800 text-white py-2 rounded hover:bg-gray-700 transition text-sm
+                    ${outOfStock ? 'opacity-50 cursor-not-allowed' : ''}"
+                    ${outOfStock ? 'disabled' : ''}>
+                    ${outOfStock ? 'Stok Habis' : 'Lihat Detail & Pesan'}
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function openProductDetail(productId) {
+    selectedProduct = products.find(p => p.id === productId);
+    selectedSize    = null;
+    if (!selectedProduct) return;
+
+    document.getElementById('modal-product-name').textContent        = selectedProduct.name;
+    document.getElementById('modal-product-image').src               = selectedProduct.image;
+    document.getElementById('modal-product-price').textContent       = fmt(selectedProduct.price);
+    document.getElementById('modal-product-description').textContent = selectedProduct.description;
+    document.getElementById('modal-product-category').textContent    = selectedProduct.category;
+    document.getElementById('modal-product-material').textContent    = selectedProduct.material;
+    document.getElementById('modal-qty').value = 1;
+
+    renderSizeOptions();
+    updateAddButton();
+    document.getElementById('product-detail-modal').classList.remove('hidden');
+}
+
+function closeProductDetail() {
+    document.getElementById('product-detail-modal').classList.add('hidden');
+    selectedSize = null;
+}
+
+function renderSizeOptions() {
+    document.getElementById('size-options').innerHTML = Object.entries(selectedProduct.sizes).map(([size, stock]) => `
+        <button onclick="selectSize('${size}')"
+            class="size-button py-2 px-1 rounded border-2 text-sm font-semibold
+            ${selectedSize === size ? 'border-green-600 bg-green-100 text-green-700' : 'border-gray-300 hover:border-gray-400'}
+            ${stock === 0 ? 'opacity-40 cursor-not-allowed' : ''}"
+            ${stock === 0 ? 'disabled' : ''}>
+            <div>${size}</div>
+            <div class="text-xs ${stock === 0 ? 'text-red-500' : 'text-gray-500'}">${stock > 0 ? stock : 'Habis'}</div>
+        </button>`).join('');
+}
+
+function selectSize(size) {
+    if (!selectedProduct || selectedProduct.sizes[size] === 0) return;
+    selectedSize = size;
+    renderSizeOptions();
+    updateAddButton();
+}
+
+function updateAddButton() {
+    const btn  = document.getElementById('modal-add-button');
+    const info = document.getElementById('stock-info');
+    if (selectedSize) {
+        const stock = selectedProduct.sizes[selectedSize];
+        const inCart = cart.find(i => i.id === selectedProduct.id && i.size === selectedSize);
+        const inCartQty = inCart ? inCart.qty : 0;
+        const avail = stock - inCartQty;
+        info.innerHTML = `<p class="text-gray-700"><strong>Ukuran ${selectedSize}:</strong> ${stock} tersedia${inCartQty > 0 ? ` (${inCartQty} di keranjang)` : ''}</p>`;
+        if (avail > 0) {
+            btn.disabled = false;
+            btn.classList.remove('opacity-50','cursor-not-allowed');
+        } else {
+            btn.disabled = true;
+            btn.classList.add('opacity-50','cursor-not-allowed');
+            info.innerHTML += '<p class="text-red-600 text-xs mt-1">Stok sudah di keranjang.</p>';
+        }
+    } else {
+        info.innerHTML = '<p class="text-gray-700">Pilih ukuran terlebih dahulu</p>';
+        btn.disabled = true;
+        btn.classList.add('opacity-50','cursor-not-allowed');
+    }
+}
+
+function increaseQty() {
+    if (!selectedSize) return;
+    const inp   = document.getElementById('modal-qty');
+    const inCart = cart.find(i => i.id === selectedProduct.id && i.size === selectedSize);
+    const max   = selectedProduct.sizes[selectedSize] - (inCart ? inCart.qty : 0);
+    if (parseInt(inp.value) < max) inp.value = parseInt(inp.value) + 1;
+}
+
+function decreaseQty() {
+    const inp = document.getElementById('modal-qty');
+    if (parseInt(inp.value) > 1) inp.value = parseInt(inp.value) - 1;
+}
+
+function addToCart() {
+    if (!selectedSize || !selectedProduct) { showToast('Pilih ukuran!', 'error'); return; }
+
+    const qty  = parseInt(document.getElementById('modal-qty').value);
+    const key  = `${selectedProduct.id}-${selectedSize}`;
+    const item = cart.find(i => i.cartKey === key);
+
+    // Cek stok
+    const inCartQty = item ? item.qty : 0;
+    const avail = selectedProduct.sizes[selectedSize] - inCartQty;
+    if (qty > avail) {
+        showToast(`Stok tidak cukup. Maks ${avail} lagi.`, 'error');
+        return;
+    }
+
+    if (item) {
+        item.qty += qty;
+    } else {
+        cart.push({
+            cartKey: key, id: selectedProduct.id,
+            name: selectedProduct.name, size: selectedSize,
+            price: selectedProduct.price, image: selectedProduct.image, qty
+        });
+    }
+
+    saveCart();
+    updateCartBadge();
+    showToast(`${selectedProduct.name} (${selectedSize}) ditambahkan!`, 'success');
+    closeProductDetail();
+}
+
+// =====================================================
+// KERANJANG
+// =====================================================
+function updateCartBadge() {
+    document.getElementById('cart-count').textContent =
+        cart.reduce((a, i) => a + i.qty, 0);
+}
+
+function renderCartItems() {
+    const container  = document.getElementById('cart-items');
+    const totalPrice = cart.reduce((a, i) => a + i.price * i.qty, 0);
+
+    if (cart.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center mt-10">Keranjang kosong.</p>';
+    } else {
+        container.innerHTML = cart.map((item, idx) => `
+            <div class="flex justify-between items-center border-b py-3">
+                <div class="flex-1 mr-2">
+                    <h4 class="font-semibold text-sm">${item.name}</h4>
+                    <p class="text-xs text-gray-600">Ukuran: <strong>${item.size}</strong></p>
+                    <p class="text-xs text-gray-500">${fmt(item.price)} × ${item.qty} = <strong>${fmt(item.price * item.qty)}</strong></p>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="changeCartQty(${idx},-1)" class="bg-gray-200 w-7 h-7 rounded hover:bg-gray-300 text-sm font-bold">-</button>
+                    <span class="w-6 text-center text-sm">${item.qty}</span>
+                    <button onclick="changeCartQty(${idx},1)"  class="bg-gray-200 w-7 h-7 rounded hover:bg-gray-300 text-sm font-bold">+</button>
+                    <button onclick="removeCartItem(${idx})" class="ml-1 text-red-500 hover:text-red-700">
+                        <i class="fa-solid fa-trash text-sm"></i>
+                    </button>
+                </div>
+            </div>`).join('');
+    }
+
+    document.getElementById('cart-total').textContent = fmt(totalPrice);
+}
+
+function toggleCart() {
+    const m = document.getElementById('cart-modal');
+    m.classList.toggle('hidden');
+    if (!m.classList.contains('hidden')) renderCartItems();
+}
+
+function changeCartQty(idx, delta) {
+    const item = cart[idx];
+    if (!item) return;
+    const newQty = item.qty + delta;
+    if (newQty <= 0) {
+        cart.splice(idx, 1);
+    } else {
+        // cek stok
+        const prod = products.find(p => p.id === item.id);
+        const maxStock = prod ? (prod.sizes[item.size] || 0) : 0;
+        if (newQty > maxStock) { showToast('Stok tidak cukup!', 'error'); item.qty = maxStock; }
+        else item.qty = newQty;
+    }
+    saveCart();
+    updateCartBadge();
+    renderCartItems();
+}
+
+function removeCartItem(idx) {
+    cart.splice(idx, 1);
+    saveCart();
+    updateCartBadge();
+    renderCartItems();
+}
+
+// =====================================================
+// CHECKOUT → WHATSAPP
+// =====================================================
+function checkout() {
+    if (cart.length === 0) { showToast('Keranjang kosong!', 'error'); return; }
+
+    // Validasi stok final
+    for (const item of cart) {
+        const prod = products.find(p => p.id === item.id);
+        const stock = prod ? (prod.sizes[item.size] || 0) : 0;
+        if (item.qty > stock) {
+            showToast(`Stok ${item.name} (${item.size}) tidak cukup. Maks ${stock}.`, 'error');
+            return;
+        }
+    }
+
+    const total = cart.reduce((a, i) => a + i.price * i.qty, 0);
+    const orderId = 'BS-' + Date.now();
+
+    // Bangun pesan WA
+    let msg = `*🛍️ PESANAN BARU - BajuStore*\n`;
+    msg += `No. Order: ${orderId}\n`;
+    msg += `====================================\n\n`;
+
+    if (!currentUser.guest) {
+        msg += `*Nama:* ${currentUser.name}\n`;
+        msg += `*Telp:* ${currentUser.phone || '-'}\n`;
+        msg += `*Alamat:* ${currentUser.address || '-'}\n\n`;
+    } else {
+        msg += `*Pelanggan:* Tamu (belum login)\n\n`;
+    }
+
+    msg +=`*&#127881📝 DETAIL PESANAN:*\n`;
+    cart.forEach((item, i) => {
+        msg += `${i+1}. ${item.name} (${item.size}) × ${item.qty} = ${fmt(item.price * item.qty)}\n`;
+    });
+    msg += `\n====================================\n`;
+    msg += `*💰 TOTAL: ${fmt(total)}*\n\n`;
+    msg += `Mohon konfirmasi pesanan & metode pembayaran. Terima kasih! 🙏`;
+
+    // Kurangi stok
+    cart.forEach(item => {
+        const prod = products.find(p => p.id === item.id);
+        if (prod) prod.sizes[item.size] = Math.max(0, prod.sizes[item.size] - item.qty);
+    });
+    saveProducts();
+
+    // Simpan order (hanya jika login, bukan guest)
+    if (!currentUser.guest) {
+        orders = loadOrders(); // Ambil terbaru
+        orders.push({
+            id: orderId, userId: currentUser.id,
+            buyerName: currentUser.name, buyerPhone: currentUser.phone, buyerAddress: currentUser.address,
+            items: JSON.parse(JSON.stringify(cart)),
+            totalPrice: total,
+            orderDate: new Date().toLocaleString('id-ID'),
+            status: 'Pending'
+        });
+        saveOrders();
+    }
+
+    // Buka WA
+    window.open(`https://wa.me/${SELLER_WA}?text=${encodeURIComponent(msg)}`, '_blank');
+
+    // Reset cart
+    cart = [];
+    saveCart();
+    updateCartBadge();
+    renderCartItems();
+    renderProducts(); // refresh stok di kartu
+    document.getElementById('cart-modal').classList.add('hidden');
+    showToast('Pesanan berhasil dikirim ke WhatsApp penjual!', 'success');
+}
+
+// =====================================================
+// RIWAYAT PESANAN
+// =====================================================
+function openOrderHistory() {
+    orders = loadOrders();
+    const userOrders = orders.filter(o => o.userId === currentUser.id);
+    const content    = document.getElementById('order-history-content');
+
+    if (userOrders.length === 0) {
+        content.innerHTML = '<p class="text-gray-500 text-center py-8">Belum ada pesanan.</p>';
+    } else {
+        content.innerHTML = [...userOrders].reverse().map(o => `
+            <div class="border rounded-xl p-4 mb-3">
+                <div class="flex justify-between items-start mb-2">
+                    <div>
+                        <p class="font-bold text-sm">${o.id}</p>
+                        <p class="text-xs text-gray-500">${o.orderDate}</p>
+                    </div>
+                    <span class="text-xs font-semibold px-3 py-1 rounded-full
+                        ${o.status === 'Selesai' ? 'bg-green-100 text-green-700'
+                        : o.status === 'Dikirim' ? 'bg-blue-100 text-blue-700'
+                        : o.status === 'Batal'   ? 'bg-red-100 text-red-700'
+                        : 'bg-yellow-100 text-yellow-700'}">${o.status}</span>
+                </div>
+                <div class="space-y-1 text-sm mb-2">
+                    ${o.items.map(i => `<div class="flex justify-between text-gray-700">
+                        <span>${i.name} (${i.size}) ×${i.qty}</span>
+                        <span>${fmt(i.price * i.qty)}</span>
+                    </div>`).join('')}
+                </div>
+                <div class="flex justify-between border-t pt-2">
+                    <span class="text-xs text-gray-500">Total</span>
+                    <span class="font-bold text-green-600">${fmt(o.totalPrice)}</span>
+                </div>
+            </div>`).join('');
+    }
+
+    document.getElementById('order-history-modal').classList.remove('hidden');
+}
+
+function closeOrderHistory() {
+    document.getElementById('order-history-modal').classList.add('hidden');
+}
+
+// =====================================================
+// LOGOUT
+// =====================================================
+function handleLogout() {
+    if (!confirm('Anda yakin ingin logout?')) return;
+    localStorage.removeItem(BS_CURRENT_USER);
+    cart = [];
+    saveCart();
+    window.location.href = 'login.html';
+}
+
+// =====================================================
+// UTILS
+// =====================================================
+function fmt(n) { return 'Rp ' + (n||0).toLocaleString('id-ID'); }
+
+function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    clearTimeout(window._toastTimer);
+    window._toastTimer = setTimeout(() => { t.className = ''; }, 3000);
+}
+
+window.addEventListener('load', initApp);
+</script>
+</body>
+</html>
